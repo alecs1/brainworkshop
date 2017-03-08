@@ -2,14 +2,14 @@
 # pyglet
 # Copyright (c) 2006-2008 Alex Holkner
 # All rights reserved.
-#
+# 
 # Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions
+# modification, are permitted provided that the following conditions 
 # are met:
 #
 #  * Redistributions of source code must retain the above copyright
 #    notice, this list of conditions and the following disclaimer.
-#  * Redistributions in binary form must reproduce the above copyright
+#  * Redistributions in binary form must reproduce the above copyright 
 #    notice, this list of conditions and the following disclaimer in
 #    the documentation and/or other materials provided with the
 #    distribution.
@@ -34,11 +34,11 @@
 
 '''
 '''
+from __future__ import print_function
 
 __docformat__ = 'restructuredtext'
-__version__ = '$Id: lib.py 1978 2008-03-28 15:11:48Z Alex.Holkner $'
+__version__ = '$Id$'
 
-import sys
 import ctypes
 
 import pyglet
@@ -90,9 +90,9 @@ def errcheck(result, func, arguments):
             name = repr(func)
         if _debug_gl_trace_args:
             trace_args = ', '.join([repr(arg)[:20] for arg in arguments])
-            print '%s(%s)' % (name, trace_args)
+            print('%s(%s)' % (name, trace_args))
         else:
-            print name
+            print(name)
 
     from pyglet import gl
     context = gl.current_context
@@ -135,9 +135,9 @@ link_AGL = None
 link_GLX = None
 link_WGL = None
 
-if sys.platform in ('win32', 'cygwin'):
+if pyglet.compat_platform in ('win32', 'cygwin'):
     from pyglet.gl.lib_wgl import link_GL, link_GLU, link_WGL
-elif sys.platform == 'darwin':
+elif pyglet.compat_platform == 'darwin':
     from pyglet.gl.lib_agl import link_GL, link_GLU, link_AGL
 else:
     from pyglet.gl.lib_glx import link_GL, link_GLU, link_GLX

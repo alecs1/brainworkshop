@@ -10,7 +10,7 @@ Or visit:
    http://brainworkshop.sourceforge.net
 
 Configuration options are available in the file 'config.ini'
-in the data folder. This file is created the when the program is
+in the data folder. This file is created when the program is
 first launched. Windows users can access this file via the
 'Configuration' item in the Brain Workshop group in the Start Menu.
 Mac OS X users will need to right-click on the brainworkshop icon,
@@ -46,6 +46,13 @@ installation are available on the Brain Workshop web site:
 
 ----------------------------------------------------------------------
 Change Log:
+
+4.8.1:
+* Bugfix release.  Text shows up properly on Menu screens with
+   BLACK_BACKGROUND=True.  Bug in graphing code fixed which caused some
+   stats.txt files to not be graphable.  Option added to remove post-
+   session feedback (requested by a researcher).  Daily session counter
+   fixed.  Trials per session at startup fixed.
 
 4.8:
 * Changed config.ini file format.  Existing config.ini files will be

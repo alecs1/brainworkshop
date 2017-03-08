@@ -2,14 +2,14 @@
 # pyglet
 # Copyright (c) 2006-2008 Alex Holkner
 # All rights reserved.
-#
+# 
 # Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions
+# modification, are permitted provided that the following conditions 
 # are met:
 #
 #  * Redistributions of source code must retain the above copyright
 #    notice, this list of conditions and the following disclaimer.
-#  * Redistributions in binary form must reproduce the above copyright
+#  * Redistributions in binary form must reproduce the above copyright 
 #    notice, this list of conditions and the following disclaimer in
 #    the documentation and/or other materials provided with the
 #    distribution.
@@ -35,10 +35,10 @@
 '''Extensible attributed text format for representing pyglet formatted
 documents.
 '''
+from builtins import chr
+from builtins import map
 
-__docformat__ = 'restructuredtext'
-__version__ = '$Id: $'
-
+from functools import reduce
 import operator
 import parser
 import re
@@ -86,7 +86,7 @@ class AttributedTextDecoder(pyglet.text.DocumentDecoder):
                 self.append('\n')
                 trailing_newline = True
             elif group == 'nl_para':
-                self.append(m.group('nl_para'))
+                self.append(m.group('nl_para')[1:]) # ignore the first \n
                 trailing_newline = True
             elif group == 'attr':
                 try:
@@ -102,14 +102,14 @@ class AttributedTextDecoder(pyglet.text.DocumentDecoder):
                     if trailing_newline:
                         self.attributes[name[1:]] = val
                     else:
-                        self.doc.set_paragraph_style(self.length, self.length,
+                        self.doc.set_paragraph_style(self.length, self.length, 
                                                      {name[1:]: val})
                 else:
                     self.attributes[name] = val
             elif group == 'escape_dec':
-                self.append(unichr(int(m.group('escape_dec_val'))))
+                self.append(chr(int(m.group('escape_dec_val'))))
             elif group == 'escape_hex':
-                self.append(unichr(int(m.group('escape_hex_val'), 16)))
+                self.append(chr(int(m.group('escape_hex_val'), 16)))
             elif group == 'escape_lbrace':
                 self.append('{')
             elif group == 'escape_rbrace':

@@ -55,6 +55,9 @@ The entire domain can be efficiently drawn in one step with the
 `VertexDomain.draw` method, assuming all the vertices comprise primitives of
 the same OpenGL primitive mode.
 '''
+from builtins import zip
+from builtins import range
+from builtins import object
 
 __docformat__ = 'restructuredtext'
 __version__ = '$Id: $'
@@ -158,10 +161,22 @@ class VertexDomain(object):
     def __init__(self, attribute_usages):
         self.allocator = allocation.Allocator(self._initial_count)
 
+        # If there are any MultiTexCoord attributes, then a TexCoord attribute
+        # must be converted.
+        have_multi_texcoord = False
+        for attribute, _, _ in attribute_usages:
+            if isinstance(attribute, vertexattribute.MultiTexCoordAttribute):
+                have_multi_texcoord = True
+                break
+
         static_attributes = []
         attributes = []
         self.buffer_attributes = []   # list of (buffer, attributes)
         for attribute, usage, vbo in attribute_usages:
+            if (have_multi_texcoord and
+                isinstance(attribute, vertexattribute.TexCoordAttribute)):
+                attribute.convert_to_multi_tex_coord_attribute()
+
             if usage == GL_STATIC_DRAW:
                 # Group attributes for interleaved buffer
                 static_attributes.append(attribute)
@@ -187,6 +202,7 @@ class VertexDomain(object):
             self.buffer_attributes.append(
                 (buffer, static_attributes))
 
+            attributes.extend(static_attributes)
             for attribute in static_attributes:
                 attribute.buffer = buffer
 
@@ -196,11 +212,22 @@ class VertexDomain(object):
         for attribute in attributes:
             if isinstance(attribute, vertexattribute.GenericAttribute):
                 index = attribute.index
-                if 'generic' not in self.attributes:
+                # TODO create a name and use it (e.g. 'generic3')
+                # XXX this won't migrate; not documented.
+                if 'generic' not in self.attribute_names:
                     self.attribute_names['generic'] = {}
                 assert index not in self.attribute_names['generic'], \
                     'More than one generic attribute with index %d' % index
                 self.attribute_names['generic'][index] = attribute
+            elif isinstance(attribute, vertexattribute.MultiTexCoordAttribute):
+                # XXX this won't migrate; not documented.
+                texture = attribute.texture
+                if 'multi_tex_coords' not in self.attribute_names:
+                    self.attribute_names['multi_tex_coords'] = []
+                assert texture not in self.attribute_names['multi_tex_coords'],\
+                    'More than one multi_tex_coord attribute for texture %d' % \
+                        texture
+                self.attribute_names['multi_tex_coords'].insert(texture,attribute)
             else:
                 name = attribute.plural
                 assert name not in self.attributes, \
@@ -211,13 +238,16 @@ class VertexDomain(object):
         # Break circular refs that Python GC seems to miss even when forced
         # collection.
         for attribute in self.attributes:
-            del attribute.buffer
+            try:
+                del attribute.buffer
+            except AttributeError:
+                pass
 
     def _safe_alloc(self, count):
         '''Allocate vertices, resizing the buffers if necessary.'''
         try:
             return self.allocator.alloc(count)
-        except allocation.AllocatorMemoryException, e:
+        except allocation.AllocatorMemoryException as e:
             capacity = _nearest_pow2(e.requested_capacity)
             self._version += 1
             for buffer, _ in self.buffer_attributes:
@@ -229,7 +259,7 @@ class VertexDomain(object):
         '''Reallocate vertices, resizing the buffers if necessary.'''
         try:
             return self.allocator.realloc(start, count, new_count)
-        except allocation.AllocatorMemoryException, e:
+        except allocation.AllocatorMemoryException as e:
             capacity = _nearest_pow2(e.requested_capacity)
             self._version += 1
             for buffer, _ in self.buffer_attributes:
@@ -381,8 +411,8 @@ class VertexList(object):
                 Domain to migrate this vertex list to.
 
         '''
-        assert domain.attribute_names.keys() == \
-            self.domain.attribute_names.keys(), 'Domain attributes must match.'
+        assert list(domain.attribute_names.keys()) == \
+            list(self.domain.attribute_names.keys()), 'Domain attributes must match.'
 
         new_start = domain._safe_alloc(self.count)
         for key, old_attribute in self.domain.attribute_names.items():
@@ -529,22 +559,59 @@ class VertexList(object):
     _tex_coords_cache_version = None
 
     def _get_tex_coords(self):
-        if (self._tex_coords_cache_version != self.domain._version):
-            domain = self.domain
-            attribute = domain.attribute_names['tex_coords']
-            self._tex_coords_cache = attribute.get_region(
-                attribute.buffer, self.start, self.count)
-            self._tex_coords_cache_version = domain._version
+        if 'multi_tex_coords' not in self.domain.attribute_names:
+            if (self._tex_coords_cache_version != self.domain._version):
+                domain = self.domain
+                attribute = domain.attribute_names['tex_coords']
+                self._tex_coords_cache = attribute.get_region(
+                    attribute.buffer, self.start, self.count)
+                self._tex_coords_cache_version = domain._version
 
-        region = self._tex_coords_cache
-        region.invalidate()
-        return region.array
+            region = self._tex_coords_cache
+            region.invalidate()
+            return region.array
+        else:
+            return None
 
     def _set_tex_coords(self, data):
-        self._get_tex_coords()[:] = data
+        if self._get_tex_coords() != None:
+            self._get_tex_coords()[:] = data
 
     tex_coords = property(_get_tex_coords, _set_tex_coords,
                           doc='''Array of texture coordinate data.''')
+
+    # ---
+
+    def _get_multi_tex_coords(self):
+        if 'tex_coords' not in self.domain.attribute_names:
+            if (self._tex_coords_cache_version != self.domain._version):
+                domain = self.domain
+                attribute = domain.attribute_names['multi_tex_coords']
+                self._tex_coords_cache = []
+                for a in attribute:
+                    self._tex_coords_cache.append(a.get_region(
+                        a.buffer, self.start, self.count))
+                self._tex_coords_cache_version = domain._version
+
+            region = self._tex_coords_cache
+            array = []
+            for a in region:
+                a.invalidate()
+                array.append(a.array)
+            return array
+        else:
+            return None
+
+    def _set_multi_tex_coords(self, data):
+        if self._get_multi_tex_coords() != None:
+            for a in range(0, len(self._tex_coords_cache),1):
+                if a > len(data):
+                    break
+                elif data[a] != None:
+                    self._tex_coords_cache[a].array[:] = data[a]
+
+    multi_tex_coords = property(_get_multi_tex_coords, _set_multi_tex_coords,
+                                doc='''Multi-array texture coordinate data.''')
 
     # ---
 
@@ -593,7 +660,7 @@ class IndexedVertexDomain(VertexDomain):
         '''Allocate indices, resizing the buffers if necessary.'''
         try:
             return self.index_allocator.alloc(count)
-        except allocation.AllocatorMemoryException, e:
+        except allocation.AllocatorMemoryException as e:
             capacity = _nearest_pow2(e.requested_capacity)
             self._version += 1
             self.index_buffer.resize(capacity * self.index_element_size)
@@ -604,7 +671,7 @@ class IndexedVertexDomain(VertexDomain):
         '''Reallocate indices, resizing the buffers if necessary.'''
         try:
             return self.index_allocator.realloc(start, count, new_count)
-        except allocation.AllocatorMemoryException, e:
+        except allocation.AllocatorMemoryException as e:
             capacity = _nearest_pow2(e.requested_capacity)
             self._version += 1
             self.index_buffer.resize(capacity * self.index_element_size)
@@ -682,7 +749,7 @@ class IndexedVertexDomain(VertexDomain):
                     self.index_buffer.ptr + starts[0])
             elif gl_info.have_version(1, 4):
                 starts = [s * self.index_element_size + self.index_buffer.ptr for s in starts]
-                starts = cast((GLuint * primcount)(*starts), POINTER(c_void_p))
+                starts = ctypes.cast((GLuint * primcount)(*starts), ctypes.POINTER(ctypes.c_void_p))
                 sizes = (GLsizei * primcount)(*sizes)
                 glMultiDrawElements(mode, sizes, GL_UNSIGNED_INT, starts,
                                     primcount)
@@ -726,7 +793,7 @@ class IndexedVertexList(VertexList):
         # Change indices (because vertices moved)
         if old_start != self.start:
             diff = self.start - old_start
-            self.indices[:] = map(lambda i: i + diff, self.indices)
+            self.indices[:] = [i + diff for i in self.indices]
 
         # Resize indices
         new_start = self.domain._safe_index_realloc(
@@ -746,6 +813,43 @@ class IndexedVertexList(VertexList):
         '''Delete this group.'''
         super(IndexedVertexList, self).delete()
         self.domain.index_allocator.dealloc(self.index_start, self.index_count)
+        
+    def migrate(self, domain):
+        '''Move this group from its current indexed domain and add to the 
+        specified one.  Attributes on domains must match.  (In practice, used 
+        to change parent state of some vertices).
+
+        :Parameters:
+            `domain` : `IndexedVertexDomain`
+                Indexed domain to migrate this vertex list to.
+
+        '''
+        old_start = self.start
+        old_domain = self.domain
+        super(IndexedVertexList, self).migrate(domain)
+
+        # Note: this code renumber the indices of the *original* domain
+        # because the vertices are in a new position in the new domain
+        if old_start != self.start:
+            diff = self.start - old_start
+            region = old_domain.get_index_region(self.index_start, 
+                                self.index_count)
+            old_indices = region.array
+            old_indices[:] = [i + diff for i in old_indices]
+            region.invalidate()
+                                                
+        # copy indices to new domain
+        old = old_domain.get_index_region(self.index_start, self.index_count)
+        # must delloc before calling safe_index_alloc or else problems when same
+        # batch is migrated to because index_start changes after dealloc
+        old_domain.index_allocator.dealloc(self.index_start, self.index_count)
+        new_start = self.domain._safe_index_alloc(self.index_count)
+        new = self.domain.get_index_region(new_start, self.index_count)
+        new.array[:] = old.array[:]
+        new.invalidate()
+        
+        self.index_start = new_start
+        self._indices_cache_version = None
 
     def _set_index_data(self, data):
         # TODO without region

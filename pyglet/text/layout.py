@@ -140,13 +140,24 @@ entire paragraph, otherwise results are undefined.
     the text layout.  Defaults to the empty list.  When the tab stops
     are exhausted, they implicitly continue at 50 pixel intervals.
 ``wrap``
-    Boolean.  If True (the default), text wraps within the width of the layout.
+    ``char``, ``word``, True (default) or False.  The boundaries at which to
+    wrap text to prevent it overflowing a line.  With ``char``, the line
+    wraps anywhere in the text; with ``word`` or True, the line wraps at
+    appropriate boundaries between words; with False the line does not wrap,
+    and may overflow the layout width.  ``char`` and ``word`` styles are
+    since pyglet 1.2.
 
 Other attributes can be used to store additional style information within the
 document; they will be ignored by the built-in text classes.
 
 :since: pyglet 1.1
 '''
+from __future__ import division
+from builtins import zip
+from builtins import map
+from builtins import range
+from past.utils import old_div
+from builtins import object
 
 __docformat__ = 'restructuredtext'
 __version__ = '$Id: $'
@@ -229,8 +240,8 @@ class _Line(object):
         self.width += box.advance
 
     def delete(self, layout):
-        for list in self.vertex_lists:
-            list.delete()
+        for vertex_list in self.vertex_lists:
+            vertex_list.delete()
         self.vertex_lists = []
 
         for box in self.boxes:
@@ -254,8 +265,8 @@ class _StaticLayoutContext(_LayoutContext):
         self.vertex_lists = layout._vertex_lists
         self.boxes = layout._boxes
 
-    def add_list(self, list):
-        self.vertex_lists.append(list)
+    def add_list(self, vertex_list):
+        self.vertex_lists.append(vertex_list)
 
     def add_box(self, box):
         self.boxes.append(box)
@@ -263,8 +274,8 @@ class _StaticLayoutContext(_LayoutContext):
 class _IncrementalLayoutContext(_LayoutContext):
     line = None
 
-    def add_list(self, list):
-        self.line.vertex_lists.append(list)
+    def add_list(self, vertex_list):
+        self.line.vertex_lists.append(vertex_list)
 
     def add_box(self, box):
         pass
@@ -337,7 +348,7 @@ class _GlyphBox(_AbstractBox):
                 v2 += x1
                 v1 += y + baseline
                 v3 += y + baseline
-                vertices.extend([v0, v1, v2, v1, v2, v3, v0, v3])
+                vertices.extend(map(int, [v0, v1, v2, v1, v2, v3, v0, v3]))
                 t = glyph.tex_coords
                 tex_coords.extend(t)
                 x1 += glyph.advance
@@ -349,11 +360,11 @@ class _GlyphBox(_AbstractBox):
                 color = (0, 0, 0, 255)
             colors.extend(color * ((end - start) * 4))
 
-        list = layout.batch.add(n_glyphs * 4, GL_QUADS, group,
+        vertex_list = layout.batch.add(n_glyphs * 4, GL_QUADS, group,
             ('v2f/dynamic', vertices),
             ('t3f/dynamic', tex_coords),
             ('c4B/dynamic', colors))
-        context.add_list(list)
+        context.add_list(vertex_list)
 
         # Decoration (background color and underline)
         #
@@ -420,7 +431,7 @@ class _GlyphBox(_AbstractBox):
         last_glyph_x = 0
         for kern, glyph in self.glyphs:
             last_glyph_x += kern
-            if last_glyph_x + glyph.advance / 2 > x:
+            if last_glyph_x + glyph.advance // 2 > x:
                 return position
             position += 1
             last_glyph_x += glyph.advance
@@ -456,7 +467,7 @@ class _InlineElementBox(_AbstractBox):
             return self.advance
 
     def get_position_in_box(self, x):
-        if x < self.advance / 2:
+        if x < self.advance // 2:
             return 0
         else:
             return 1
@@ -466,7 +477,7 @@ class _InlineElementBox(_AbstractBox):
 
 class _InvalidRange(object):
     def __init__(self):
-        self.start = sys.maxint
+        self.start = sys.maxsize
         self.end = 0
 
     def insert(self, start, length):
@@ -494,7 +505,7 @@ class _InvalidRange(object):
 
     def validate(self):
         start, end = self.start, self.end
-        self.start = sys.maxint
+        self.start = sys.maxsize
         self.end = 0
         return start, end
 
@@ -732,7 +743,8 @@ class TextLayout(object):
     _origin_layout = False  # Lay out relative to origin?  Otherwise to box.
 
     def __init__(self, document, width=None, height=None,
-                 multiline=False, dpi=None, batch=None, group=None):
+                 multiline=False, dpi=None, batch=None, group=None,
+                 wrap_lines=True):
         '''Create a text layout.
 
         :Parameters:
@@ -745,6 +757,7 @@ class TextLayout(object):
             `multiline` : bool
                 If False, newline and paragraph characters are ignored, and
                 text is not word-wrapped.
+                If True, text is wrapped only if the `wrap_lines` is True.
             `dpi` : float
                 Font resolution; defaults to 96.
             `batch` : `Batch`
@@ -753,6 +766,9 @@ class TextLayout(object):
                 Optional rendering group to parent all groups this text layout
                 uses.  Note that layouts with different
                 rendered simultaneously in a batch.
+            `wrap_lines` : bool
+                If True and `multiline` is True, the text is word-wrapped using
+                the specified width.
 
         '''
         self.content_width = 0
@@ -766,18 +782,25 @@ class TextLayout(object):
             self._own_batch = True
         self.batch = batch
 
-        if width is not None:
-            self._width = width
+        self._width = width
         if height is not None:
             self._height = height
         if multiline:
-            assert not multiline or width, 'Must specify width with multiline'
             self._multiline = multiline
+
+        self._wrap_lines_flag = wrap_lines
+        self._wrap_lines_invariant()
 
         if dpi is None:
             dpi = 96
         self._dpi = dpi
         self.document = document
+
+    def _wrap_lines_invariant(self):
+       self._wrap_lines = self._multiline and self._wrap_lines_flag
+       assert not self._wrap_lines or self._width, "When the parameters "\
+            "'multiline' and 'wrap_lines' are True, the parameter 'width'"\
+            "must be a number."
 
     def _parse_distance(self, distance):
         if distance is None:
@@ -910,7 +933,7 @@ class TextLayout(object):
 
     def _get_left(self):
         if self._multiline:
-            width = self._width
+            width = self._width if self._wrap_lines else self.content_width
         else:
             width = self.content_width
 
@@ -1040,7 +1063,7 @@ class TextLayout(object):
         else:
             wrap_iterator = runlist.FilteredRunIterator(
                 self._document.get_style_runs('wrap'),
-                lambda value: value in (True, False),
+                lambda value: value in (True, False, 'char', 'word'),
                 True)
         margin_left_iterator = runlist.FilteredRunIterator(
             self._document.get_style_runs('margin_left'),
@@ -1066,9 +1089,7 @@ class TextLayout(object):
             line.paragraph_begin = True
             line.margin_left += self._parse_distance(indent_iterator[start])
         wrap = wrap_iterator[start]
-        if self._width is None:
-            width = None
-        else:
+        if self._wrap_lines:
             width = self._width - line.margin_left - line.margin_right
 
         # Current right-most x position in line being laid out.
@@ -1115,7 +1136,7 @@ class TextLayout(object):
                 else:
                     kern = self._parse_distance(kerning_iterator[index])
 
-                if text in u'\u0020\u200b\t':
+                if wrap != 'char' and text in u'\u0020\u200b\t':
                     # Whitespace: commit pending runs to this line.
                     for run in run_accum:
                         line.add_box(run)
@@ -1156,14 +1177,14 @@ class TextLayout(object):
                 else:
                     new_paragraph = text in u'\n\u2029'
                     new_line = (text == u'\u2028') or new_paragraph
-                    if (wrap and x + kern + glyph.advance >= width) or new_line:
+                    if (wrap and self._wrap_lines and x + kern + glyph.advance >= width) or new_line:
                         # Either the pending runs have overflowed the allowed
                         # line width or a newline was encountered.  Either
                         # way, the current line must be flushed.
 
-                        if new_line:
-                            # Forced newline.  Commit everything pending
-                            # without exception.
+                        if new_line or wrap == 'char':
+                            # Forced newline or char-level wrapping.  Commit
+                            # everything pending without exception.
                             for run in run_accum:
                                 line.add_box(run)
                             run_accum = []
@@ -1174,7 +1195,9 @@ class TextLayout(object):
                             owner_accum_width = 0
 
                             line.length += 1
-                            next_start = index + 1
+                            next_start = index
+                            if new_line:
+                                next_start += 1
 
                         # Create the _GlyphBox for the committed glyphs in the
                         # current owner.
@@ -1212,7 +1235,7 @@ class TextLayout(object):
                                 line.paragraph_begin = True
 
                             # Remove kern from first glyph of line
-                            if run_accum:
+                            if run_accum and hasattr(run_accum, 'glyphs') and run_accum.glyphs:
                                 k, g = run_accum[0].glyphs[0]
                                 run_accum[0].glyphs[0] = (0, g)
                                 run_accum_width -= k
@@ -1224,7 +1247,8 @@ class TextLayout(object):
                                 nokern = True
 
                             x = run_accum_width + owner_accum_width
-                            width = (self._width -
+                            if self._wrap_lines:
+                                width = (self._width -
                                      line.margin_left - line.margin_right)
 
                     if isinstance(glyph, _AbstractBox):
@@ -1237,7 +1261,7 @@ class TextLayout(object):
                         wrap = wrap_iterator[next_start]
                         line.margin_left += \
                             self._parse_distance(indent_iterator[next_start])
-                        if width is not None:
+                        if self._wrap_lines:
                             width = (self._width -
                                      line.margin_left - line.margin_right)
                     elif not new_line:
@@ -1390,10 +1414,10 @@ class TextLayout(object):
             self._update()
         else:
             dx = x - self._x
-            l_dx = lambda x: x + dx
+            l_dx = lambda x: int(x + dx)
             for vertex_list in self._vertex_lists:
                 vertices = vertex_list.vertices[:]
-                vertices[::2] = map(l_dx, vertices[::2])
+                vertices[::2] = list(map(l_dx, vertices[::2]))
                 vertex_list.vertices[:] = vertices
             self._x = x
 
@@ -1415,10 +1439,10 @@ class TextLayout(object):
             self._update()
         else:
             dy = y - self._y
-            l_dy = lambda y: y + dy
+            l_dy = lambda y: int(y + dy)
             for vertex_list in self._vertex_lists:
                 vertices = vertex_list.vertices[:]
-                vertices[1::2] = map(l_dy, vertices[1::2])
+                vertices[1::2] = list(map(l_dy, vertices[1::2]))
                 vertex_list.vertices[:] = vertices
             self._y = y
 
@@ -1437,6 +1461,7 @@ class TextLayout(object):
     _width = None
     def _set_width(self, width):
         self._width = width
+        self._wrap_lines_invariant()
         self._update()
 
     def _get_width(self):
@@ -1445,7 +1470,7 @@ class TextLayout(object):
     width = property(_get_width, _set_width,
                      doc='''Width of the layout.
 
-    This property has no effect if `multiline` is False.
+    This property has no effect if `multiline` is False or `wrap_lines` is False.
 
     :type: int
     ''')
@@ -1467,6 +1492,7 @@ class TextLayout(object):
     _multiline = False
     def _set_multiline(self, multiline):
         self._multiline = multiline
+        self._wrap_lines_invariant()
         self._update()
 
     def _get_multiline(self):
@@ -1477,6 +1503,7 @@ class TextLayout(object):
 
     If multiline is False, newline and paragraph characters are ignored and
     text is not word-wrapped.
+    If True, the text is word-wrapped only if the `wrap_lines` is True.
 
     :type: bool
     ''')
@@ -1504,7 +1531,7 @@ class TextLayout(object):
 
     For the purposes of calculating the position resulting from this
     alignment, the width of the layout is taken to be `width` if `multiline`
-    is True, otherwise `content_width`.
+    is True and `wrap_lines` is True, otherwise `content_width`.
 
     :type: str
     ''')
@@ -1586,9 +1613,9 @@ class ScrollableTextLayout(TextLayout):
     _origin_layout = True
 
     def __init__(self, document, width, height, multiline=False, dpi=None,
-                 batch=None, group=None):
+                 batch=None, group=None, wrap_lines=True):
         super(ScrollableTextLayout, self).__init__(
-            document, width, height, multiline, dpi, batch, group)
+            document, width, height, multiline, dpi, batch, group, wrap_lines)
         self.top_group.width = self._width
         self.top_group.height = self._height
 
@@ -1722,7 +1749,7 @@ class IncrementalTextLayout(ScrollableTextLayout, event.EventDispatcher):
     _selection_background_color = [46, 106, 197, 255]
 
     def __init__(self, document, width, height, multiline=False, dpi=None,
-                 batch=None, group=None):
+                 batch=None, group=None, wrap_lines=True):
         event.EventDispatcher.__init__(self)
         self.glyphs = []
         self.lines = []
@@ -1737,7 +1764,7 @@ class IncrementalTextLayout(ScrollableTextLayout, event.EventDispatcher):
         self.owner_runs = runlist.RunList(0, None)
 
         ScrollableTextLayout.__init__(self,
-            document, width, height, multiline, dpi, batch, group)
+            document, width, height, multiline, dpi, batch, group, wrap_lines)
 
         self.top_group.width = width
         self.top_group.left = self._get_left()
@@ -1981,7 +2008,7 @@ class IncrementalTextLayout(ScrollableTextLayout, event.EventDispatcher):
         self.invalid_vertex_lines.invalidate(invalid_start, invalid_end)
 
     def _update_visible_lines(self):
-        start = sys.maxint
+        start = sys.maxsize
         end = 0
         for i, line in enumerate(self.lines):
             if line.y + line.descent < self.view_y:

@@ -2,14 +2,14 @@
 # pyglet
 # Copyright (c) 2006-2008 Alex Holkner
 # All rights reserved.
-#
+# 
 # Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions
+# modification, are permitted provided that the following conditions 
 # are met:
 #
 #  * Redistributions of source code must retain the above copyright
 #    notice, this list of conditions and the following disclaimer.
-#  * Redistributions in binary form must reproduce the above copyright
+#  * Redistributions in binary form must reproduce the above copyright 
 #    notice, this list of conditions and the following disclaimer in
 #    the documentation and/or other materials provided with the
 #    distribution.
@@ -31,7 +31,6 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 # ----------------------------------------------------------------------------
-# $Id:$
 
 import ctypes
 from pyglet import com
@@ -65,8 +64,15 @@ class WAVEFORMATEX(ctypes.Structure):
         ('nAvgBytesPerSec', DWORD),
         ('nBlockAlign', WORD),
         ('wBitsPerSample', WORD),
-        ('cbSize', WORD),
+        ('cbSize', WORD), 
     ]
+
+    def __repr__(self):
+        return 'WAVEFORMATEX(wFormatTag={}, nChannels={}, nSamplesPerSec={}, nAvgBytesPersec={}' \
+               ', nBlockAlign={}, wBitsPerSample={}, cbSize={})'.format(
+                       self.wFormatTag, self.nChannels, self.nSamplesPerSec,
+                       self.nAvgBytesPerSec, self.nBlockAlign, self.wBitsPerSample,
+                       self.cbSize)
 LPWAVEFORMATEX = ctypes.POINTER(WAVEFORMATEX)
 WAVE_FORMAT_PCM = 1
 
@@ -74,7 +80,7 @@ class DSCAPS(ctypes.Structure):
     _fields_ = [
         ('dwSize', DWORD),
         ('dwFlags', DWORD),
-        ('dwMinSecondarySampleRate', DWORD),
+        ('dwMinSecondarySampleRate', DWORD), 
         ('dwMaxSecondarySampleRate', DWORD),
         ('dwPrimaryBuffers', DWORD),
         ('dwMaxHwMixingAllBuffers', DWORD),
@@ -117,6 +123,11 @@ class DSBUFFERDESC(ctypes.Structure):
         ('dwReserved', DWORD),
         ('lpwfxFormat', LPWAVEFORMATEX),
     ]
+
+    def __repr__(self):
+        return 'DSBUFFERDESC(dwSize={}, dwFlags={}, dwBufferBytes={}, lpwfxFormat={})'.format(
+                self.dwSize, self.dwFlags, self.dwBufferBytes,
+                self.lpwfxFormat.contents if self.lpwfxFormat else None)
 LPDSBUFFERDESC = ctypes.POINTER(DSBUFFERDESC)
 
 class DS3DBUFFER(ctypes.Structure):
@@ -166,9 +177,9 @@ class IDirectSoundBuffer(com.IUnknown):
         ('Initialize',
          com.STDMETHOD(ctypes.c_void_p, LPDSBUFFERDESC)),
         ('Lock',
-         com.STDMETHOD(DWORD, DWORD,
-                       ctypes.POINTER(ctypes.c_void_p), LPDWORD,
-                       ctypes.POINTER(ctypes.c_void_p), LPDWORD,
+         com.STDMETHOD(DWORD, DWORD, 
+                       ctypes.POINTER(ctypes.c_void_p), LPDWORD, 
+                       ctypes.POINTER(ctypes.c_void_p), LPDWORD, 
                        DWORD)),
         ('Play',
          com.STDMETHOD(DWORD, DWORD, DWORD)),
@@ -202,7 +213,7 @@ class IDirectSound3DListener(com.IUnknown):
         ('GetDopplerFactor',
          com.STDMETHOD(PD3DVALUE)),
         ('GetOrientation',
-         com.STDMETHOD(PD3DVECTOR)),
+         com.STDMETHOD(PD3DVECTOR, PD3DVECTOR)),
         ('GetPosition',
          com.STDMETHOD(PD3DVECTOR)),
         ('GetRolloffFactor',
@@ -216,7 +227,7 @@ class IDirectSound3DListener(com.IUnknown):
         ('SetDopplerFactor',
          com.STDMETHOD(D3DVALUE, DWORD)),
         ('SetOrientation',
-         com.STDMETHOD(D3DVALUE, D3DVALUE, D3DVALUE,
+         com.STDMETHOD(D3DVALUE, D3DVALUE, D3DVALUE, 
                        D3DVALUE, D3DVALUE, D3DVALUE, DWORD)),
         ('SetPosition',
          com.STDMETHOD(D3DVALUE, D3DVALUE, D3DVALUE, DWORD)),
@@ -273,24 +284,24 @@ class IDirectSound3DBuffer(com.IUnknown):
 
 class IDirectSound(com.IUnknown):
     _methods_ = [
-        ('CreateSoundBuffer',
-         com.STDMETHOD(LPDSBUFFERDESC,
-                       ctypes.POINTER(IDirectSoundBuffer),
+        ('CreateSoundBuffer', 
+         com.STDMETHOD(LPDSBUFFERDESC, 
+                       ctypes.POINTER(IDirectSoundBuffer), 
                        LPUNKNOWN)),
-        ('GetCaps',
+        ('GetCaps', 
          com.STDMETHOD(LPDSCAPS)),
-        ('DuplicateSoundBuffer',
-         com.STDMETHOD(IDirectSoundBuffer,
+        ('DuplicateSoundBuffer', 
+         com.STDMETHOD(IDirectSoundBuffer, 
                        ctypes.POINTER(IDirectSoundBuffer))),
-        ('SetCooperativeLevel',
+        ('SetCooperativeLevel', 
          com.STDMETHOD(HWND, DWORD)),
-        ('Compact',
+        ('Compact', 
          com.STDMETHOD()),
-        ('GetSpeakerConfig',
+        ('GetSpeakerConfig', 
          com.STDMETHOD(LPDWORD)),
-        ('SetSpeakerConfig',
+        ('SetSpeakerConfig', 
          com.STDMETHOD(DWORD)),
-        ('Initialize',
+        ('Initialize', 
          com.STDMETHOD(com.LPGUID)),
     ]
     _type_ = com.COMInterface
@@ -406,3 +417,34 @@ DS3D_DEFAULTCONEANGLE = 360
 
 DS3D_DEFAULTCONEOUTSIDEVOLUME = DSBVOLUME_MAX
 
+# Return codes
+DS_OK = 0x00000000
+DSERR_OUTOFMEMORY = 0x00000007
+DSERR_NOINTERFACE = 0x000001AE
+DS_NO_VIRTUALIZATION = 0x0878000A
+DS_INCOMPLETE = 0x08780014
+DSERR_UNSUPPORTED = 0x80004001
+DSERR_GENERIC = 0x80004005
+DSERR_ACCESSDENIED = 0x80070005
+DSERR_INVALIDPARAM = 0x80070057
+DSERR_ALLOCATED = 0x8878000A
+DSERR_CONTROLUNAVAIL = 0x8878001E
+DSERR_INVALIDCALL = 0x88780032
+DSERR_PRIOLEVELNEEDED = 0x88780046
+DSERR_BADFORMAT = 0x88780064
+DSERR_NODRIVER = 0x88780078
+DSERR_ALREADYINITIALIZED = 0x88780082
+DSERR_BUFFERLOST = 0x88780096
+DSERR_OTHERAPPHASPRIO = 0x887800A0
+DSERR_UNINITALIZED = 0x887800AA
+DSERR_BUFFERTOOSMALL = 0x887810B4
+DSERR_DS8_REQUIRED = 0x887810BE
+DSERR_SENDLOOP = 0x887810C8
+DSERR_BADSENDBUFFERGUID = 0x887810D2
+DSERR_FXUNAVAILABLE = 0x887810DC
+DSERR_OBJECTNOTFOUND = 0x88781161
+
+# Buffer status
+DSBSTATUS_PLAYING = 0x00000001
+DSBSTATUS_BUFFERLOST = 0x00000002
+DSBSTATUS_LOOPING = 0x00000004
