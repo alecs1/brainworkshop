@@ -2933,8 +2933,8 @@ class ArithmeticAnswerLabel:
             else: self.negative = True
         elif input == '.':
             if not self.decimal:
-            self.decimal = True
-            self.answer.append(input)
+                self.decimal = True
+                self.answer.append(input)
         else:
             self.answer.append(input)
         self.update()
@@ -3539,7 +3539,7 @@ class Stats:
     
     def retrieve_progress(self):
         if cfg.RESET_LEVEL:
-        sessions = [s for s in self.history if s[1] == mode.mode]
+            sessions = [s for s in self.history if s[1] == mode.mode]
         else:
             sessions = [s for s in self.full_history if s[1] == mode.mode]
         mode.enforce_standard_mode()
@@ -4519,7 +4519,7 @@ def update(dt):
         if not mode.flags[mode.mode]['selfpaced'] or \
                 mode.tick > mode.ticks_per_trial-6 or \
                 mode.tick < 5:
-        mode.tick += 1
+            mode.tick += 1
         if mode.tick == 1:
             mode.show_missed = False
             if mode.trial_number > 0:
